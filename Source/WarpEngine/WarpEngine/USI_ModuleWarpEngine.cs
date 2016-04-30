@@ -55,7 +55,7 @@ namespace WarpEngine
 		{
 			var gobj = FindEditorWarpBubble();
 			if (gobj != null)
-				gobj.renderer.enabled = !gobj.renderer.enabled;
+				gobj.GetComponent<Renderer>().enabled = !gobj.GetComponent<Renderer>().enabled;
 
 		}
 
@@ -148,10 +148,11 @@ namespace WarpEngine
 
 	    private ModuleEngines eModule;
 	    private GameObject warpBubble;
-
+	    private Krakensbane krakensbane;
 	    public override void OnAwake()
 	    {
             eModule = part.FindModuleImplementing<ModuleEngines>();
+            krakensbane = (Krakensbane)FindObjectOfType(typeof(Krakensbane));
             editorBubble = FindEditorWarpBubble();
 
             foreach (var gobj in GameObject.FindGameObjectsWithTag("Icon_Hidden"))
@@ -190,7 +191,8 @@ namespace WarpEngine
 		{
 			if (stiffenJoints)
 			{
-				//Stiffen Joints
+                print("Stiffening");
+                //Stiffen Joints
 				_shipParts = new List<ShipInfo>();
 				foreach (var vp in vessel.parts)
 				{
@@ -201,19 +203,20 @@ namespace WarpEngine
 							BreakingForce = vp.breakingForce,
 							BreakingTorque = vp.breakingTorque,
 							CrashTolerance = vp.crashTolerance,
-							Constraints = vp.rigidbody.constraints
+							Constraints = vp.GetComponent<Rigidbody>().constraints
 						});
 					vp.breakingForce = Mathf.Infinity;
 					vp.breakingTorque = Mathf.Infinity;
 					vp.crashTolerance = Mathf.Infinity;
 				}
-				vessel.rigidbody.constraints &= RigidbodyConstraints.FreezeRotation;
+				vessel.GetComponent<Rigidbody>().constraints &= RigidbodyConstraints.FreezeRotation;
 			}
 
 			else
 			{
-				//Stop vessel
-				vessel.rigidbody.AddTorque(-vessel.rigidbody.angularVelocity);
+			    print("Unstiffening");
+                //Stop vessel
+				vessel.GetComponent<Rigidbody>().AddTorque(-vessel.GetComponent<Rigidbody>().angularVelocity);
 				//Reset part state
 				if (_shipParts != null)
 				{
@@ -222,14 +225,14 @@ namespace WarpEngine
 						if (vessel.parts.Contains(sp.ShipPart))
 						{
 							print("[WARP] Relaxing " + sp.ShipPart.name);
-							sp.ShipPart.rigidbody.AddTorque(-sp.ShipPart.rigidbody.angularVelocity);
+							sp.ShipPart.GetComponent<Rigidbody>().AddTorque(-sp.ShipPart.GetComponent<Rigidbody>().angularVelocity);
 							sp.ShipPart.breakingForce = sp.BreakingForce;
 							sp.ShipPart.breakingTorque = sp.BreakingTorque;
 							sp.ShipPart.crashTolerance = sp.CrashTolerance;
-							sp.ShipPart.rigidbody.constraints = sp.Constraints;
+							sp.ShipPart.GetComponent<Rigidbody>().constraints = sp.Constraints;
 						}
 					}
-					vessel.rigidbody.constraints &= ~RigidbodyConstraints.FreezeRotation;
+					vessel.GetComponent<Rigidbody>().constraints &= ~RigidbodyConstraints.FreezeRotation;
 				}
 			}
 		}
@@ -252,36 +255,39 @@ namespace WarpEngine
 		{
 			try
 			{
-				if (vessel == null || _state == StartState.Editor) return;
-				if (IsDeployed != eModule.getIgnitionState)
-				{
-					IsDeployed = eModule.getIgnitionState;
-					CheckBubbleDeployment(3);
-					SetPartState(eModule.getIgnitionState);
-				}
+				if (vessel == null || _state == StartState.Editor) 
+                    return;
+
+                if (IsDeployed != eModule.getIgnitionState)
+                {
+                    IsDeployed = eModule.getIgnitionState;
+                    CheckBubbleDeployment(3);
+                    SetPartState(eModule.getIgnitionState);
+                }
 
 				if (IsDeployed)
 				{
 					//Failsafe
-					if (!CheckAltitude())
-					{
-						eModule.Shutdown();
-						return;
-					}
+                    if (!CheckAltitude())
+                    {
+                        eModule.Shutdown();
+                        return;
+                    }
 
-					//Snip parts
-					DecoupleBubbleParts();
+                    //Snip parts
+                    DecoupleBubbleParts();
 
-					//OH NO FLAMEOUT!
-					if (eModule.flameout)
-					{
-						BubbleCollapse(eModule.currentThrottle);
-						FlightInputHandler.state.mainThrottle = 0;
-						IsDeployed = false;
-						return;
-					}
+                    //OH NO FLAMEOUT!
+                    if (eModule.flameout)
+                    {
+                        print("Flameout");
+                        BubbleCollapse(eModule.currentThrottle);
+                        FlightInputHandler.state.mainThrottle = 0;
+                        IsDeployed = false;
+                        return;
+                    }
 
-					PlayWarpAnimation(eModule.currentThrottle);
+                    PlayWarpAnimation(eModule.currentThrottle);
 
 					//Start by adding in our subluminal speed which is exponential
 					double lowerThrottle = (Math.Min(eModule.currentThrottle, SUBLIGHT_THROTTLE) * SUBLIGHT_MULT);
@@ -327,7 +333,6 @@ namespace WarpEngine
 					{
 						// Translate through space on the back of a Kraken!
 						Vector3d ps = vessel.transform.position + (transform.up*(float) distance);
-						Krakensbane krakensbane = (Krakensbane)FindObjectOfType(typeof(Krakensbane));
 						krakensbane.setOffset(ps);
 						//AngularMomentum Block
 						if (AMConservationMode == true)
@@ -438,7 +443,7 @@ namespace WarpEngine
 				//Set our color
                 var rgb = ColorUtils.HSL2RGB(Math.Abs(speed - 1), 0.5, speed / 2);
                 var c = new Color(rgb[0], rgb[1], rgb[2]);
-                warpBubble.renderer.material.SetColor("_Color", c);
+                warpBubble.GetComponent<Renderer>().material.SetColor("_Color", c);
 
 			}
 			catch (Exception)
@@ -485,7 +490,7 @@ namespace WarpEngine
 				if (_state != StartState.Editor)
 				{
 					if (editorBubble != null)
-						editorBubble.renderer.enabled = false;
+						editorBubble.GetComponent<Renderer>().enabled = false;
 				}
 			}
 			catch (Exception)
@@ -497,7 +502,7 @@ namespace WarpEngine
 		{
 			foreach (var gobj in GameObject.FindObjectsOfType<GameObject>())
 			{
-				if (gobj.name == "EditorWarpBubble" && gobj.renderer != null)
+				if (gobj.name == "EditorWarpBubble" && gobj.GetComponent<Renderer>() != null)
 					return gobj;
 			}
 
